@@ -7,12 +7,15 @@ import org.http4k.client.ApacheClient
 import org.http4k.core.Request
 import org.http4k.core.Method
 import java.nio.file.Paths
+import java.text.DecimalFormat
 import kotlin.io.path.exists
 
 fun httpGet(uri: String): String {
     val client = ApacheClient()
     val request = Request(Method.GET, uri)
     val body = client(request).bodyString()
+
+    Thread.sleep(1000)
     return body
 }
 
@@ -49,6 +52,7 @@ fun fetchURIWithCache(uri: String, mock:Boolean=false): String {
         return path.toFile().readText()
     }
 //    throw Exception("Not in Cache")
+    println("WARNING: Fetching $uri over network")
     val html = httpGet(uri)
     path.toFile().writeText(html)
     return html
@@ -82,7 +86,7 @@ fun processHTML(html: String): ScrapeResult {
     ksoupHtmlParser.write(html)
     ksoupHtmlParser.end()
 
-    println("filtername $filterName")
+//    println("filtername $filterName")
     return ScrapeResult(filterName, pointList)
 }
 
@@ -105,16 +109,39 @@ fun getFilterURIs(): List<String>{
 }
 
 fun main() {
-    val uriList = getFilterURIs().take(10)
+    val uriList = getFilterURIs()
 
     val filters: List<ScrapeResult> = uriList.map {
         processHTML(fetchURIWithCache(it, mock=false))
     }
-    filters.forEach {
-        println("${it.filterName}, ${it.pointList.count()}")
+        .filter {it.pointList.count() > 10}
+
+//    filters.forEach {
+//        println("${it.filterName}, ${it.pointList.count()}")
+//    }
+
+    val fmt = DecimalFormat("0.###E0")
+    File("filter.txt").printWriter().use { writer ->
+        writer.println("nm\t" + filters.map { it.filterName }.joinToString(separator = "\t"))
+        val wavelengths = filters[0].pointList.map { it.wavelength }
+
+        wavelengths.forEachIndexed { idx, wavelength ->
+            val line = "$wavelength\t" + filters.map { fmt.format(it.pointList.get(idx).transmission) }
+                .joinToString(separator = "\t")
+            writer.println(line)
+        }
+
     }
-//
-//    File("filter.txt").printWriter().use { writer ->
+
+    File("filters_by_row.txt").printWriter().use { writer ->
+        val headers = filters.get(0).pointList.map {it.wavelength}.joinToString(separator = "\t")
+        writer.println("name\t" + headers)
+        filters.forEach {
+            val line = it.pointList.map { fmt.format(it.transmission) }.joinToString(separator = "\t")
+            writer.println(it.filterName + "\t" + line)
+        }
+
+    }
 //        writer.println("nm\t${scrapeResult.filterName}")
 //        scrapeResult.pointList.forEach {
 //            println(it)
