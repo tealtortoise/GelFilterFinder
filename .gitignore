@@ -41,3 +41,4 @@ bin/
 ### Mac OS ###
 .DS_Store
 /pagecache/
+/filters_by_row.txt
