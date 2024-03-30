@@ -8,7 +8,10 @@ const val startWavelength5nm = 400
 const val endWavelength5nm = 700
 const val wavelengthCount5nm = (endWavelength5nm - startWavelength5nm) / 5 + 1
 
+
 data class CieXYZ(val X: Double, val Y: Double, val Z:Double)
+
+data class CiexyY(val x_: Double, val y_: Double, val Y:Double)
 
 data class Illuminant(val spectrum: List<Double>)
 
@@ -20,8 +23,8 @@ val D65: Illuminant by lazy {
     val out = (0..wavelengthCount5nm - 1).map {
         lines[it * 5 + startWavelength5nm - startWavelength].split(",")[1].toDouble()
     }
-    println(out)
-    Illuminant(out)
+    val total = out.sum()
+    Illuminant(out.map { it / total / 0.36296688171995447})
 }
 fun lineToList(line: String): List<Double> {
     return line.split(",").map { it.toDouble() }
@@ -35,7 +38,7 @@ class CIECalculator {
     private var cieYData5nm: MutableList<Double> = mutableListOf()
     private var cieZData5nm: MutableList<Double> = mutableListOf()
     private var wavelengthData: List<Double>
-    private var indexRange: IntRange
+    public var indexRange: IntRange
 
     init {
         val csvData = File(cmf1931path).readText()
@@ -67,14 +70,32 @@ class CIECalculator {
         var outZ = 0.0
         for (idx in this.indexRange){
             val d65 = D65.spectrum[idx]
-            outX += spectrum[idx] * this.cieXData5nm[idx] + d65
-            outY += spectrum[idx] * this.cieYData5nm[idx]
-            outZ += spectrum[idx] * this.cieZData5nm[idx]
+            outX += spectrum[idx] * this.cieXData5nm[idx] * d65
+            outY += spectrum[idx] * this.cieYData5nm[idx] * d65
+            outZ += spectrum[idx] * this.cieZData5nm[idx] * d65
         }
         return CieXYZ(outX, outY, outZ)
     }
 }
 
-fun main() {
-    val calculator = CIECalculator()
+val calc = CIECalculator()
+
+class GelFilter(private var name: String, var spectrum: List<Double>) {
+
+    public val xyz by lazy {
+        calc.spectrum5nmToXYZ(this.spectrum)
+    }
+    public val xyY by lazy {
+        val xyz = this.xyz
+        val x = xyz.X / (xyz.X + xyz.Y + xyz.Z)
+        val y = xyz.Y / (xyz.X + xyz.Y + xyz.Z)
+        CiexyY(x, y, xyz.Y)
+    }
+
+    override fun toString(): String {
+        return "Gel Filter \"${this.name}\" x:${this.xyY.x_} y:${this.xyY.y_} Y:${this.xyY.Y}"
+    }
 }
+
+
+val clearFilter = GelFilter("Null (Clear) filter", calc.indexRange.map { 1.0 })
