@@ -109,7 +109,7 @@ fun getFilterURIs(): List<String>{
 }
 
 fun main() {
-    val uriList = getFilterURIs()
+    val uriList = getFilterURIs().take(10)
 
     val filters: List<ScrapeResult> = uriList.map {
         processHTML(fetchURIWithCache(it, mock=false))
