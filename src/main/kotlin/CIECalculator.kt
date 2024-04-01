@@ -2,6 +2,7 @@ package org.example
 import java.io.File
 import kotlin.math.atan2
 import kotlin.math.pow
+import kotlin.system.exitProcess
 
 val cmf1931path = "data/1931CMF.csv"
 val d65path = "data/CIE_std_illum_D65.csv"
@@ -19,6 +20,10 @@ open class ThreeVector(val e1: Double,val  e2: Double, val e3:Double) {
             2 -> e3
             else -> throw Exception("Invalid index '$i'")
         }
+    }
+
+    override fun toString(): String {
+        return "%,.6f, %,.6f, %,.6f".format(e1, e2, e3)
     }
 }
 //
@@ -44,10 +49,12 @@ val D65: Illuminant by lazy {
     val wavelengthInc = 1
     val lines = csvData.split("\n")
     val out = (0..wavelengthCount5nm - 1).map {
-        lines[it * 5 + startWavelength5nm - startWavelength].split(",")[1].toDouble()
+        (0..0).map {offset ->
+            lines[it * 5 + startWavelength5nm - startWavelength + offset].split(",")[1].toDouble()
+        }.sum()
     }
     val total = out.sum()
-    Illuminant(out.map { it / total / 0.36296688171995447})
+    Illuminant(out.map { it / total / 0.36305124263665284 })
 }
 
 val E: Illuminant by lazy {
@@ -81,6 +88,7 @@ class CIECalculator {
         this.cieZData = lineToList(lines[3])
 
         this.indexRange = 0..wavelengthCount5nm-1
+
         for (idx in this.indexRange){
             val wavelength = (startWavelength5nm + 5 * idx).toDouble()
             val index1nm = idx * 5 + 40

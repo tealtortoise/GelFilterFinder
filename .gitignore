@@ -45,3 +45,4 @@ bin/
 /data/CIE_std_illum_D65.csv:Zone.Identifier
 /.~lock.filters_by_row.txt#
 /data/.~lock.1931CMF.csv#
+/filtersfiltered.txt
