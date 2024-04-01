@@ -18,6 +18,7 @@ typealias TransmittedSpectrum = List<Double>
 typealias IlluminantSpectrum = List<Double>
 typealias CMF = List<Double>
 typealias MutableCMF = MutableList<Double>
+typealias CCT = Double
 
 open class ThreeVector(val e1: Double,val  e2: Double, val e3:Double) {
     open operator fun get(i: Int): Double {
