@@ -50,6 +50,9 @@ class CieXYZ(val X: Double, val Y: Double, val Z:Double, val ref:Illuminant = D6
     public val cct by lazy {
         cieCalculator.xyzToCCT(this)
     }
+    public val lab by lazy {
+        cieCalculator.xyzToLab(this)
+    }
 
 }
 
@@ -81,6 +84,20 @@ fun readIlluminant(pathn: String, multiplier: Double): Illuminant {
     return ill
 //    val xyz = cieCalculator.spectrum5nmToXYZ(ill.spectrum, nullIlluminant)
 //    return Illuminant(ill.spectrum.map { it / xyz.Y })
+}
+
+fun readArgyllIlluminant(pathn: String): Illuminant {
+    val csvData = File(pathn).readText()
+    val lines = csvData.split("\n")
+    val rawspec = lines[18].trim().split(" ").map { it.toDouble() }
+    val spec = cieCalculator.indexRange.map {i ->
+        if (i % 2 == 0) {
+            rawspec[i /2 + 2]
+        } else {
+            (rawspec[i/2 + 2] + rawspec[i/2 + 3]) / 2.0
+        }
+    }
+    return Illuminant(spec, name=pathn.split("/").last())
 }
 
 val D65: Illuminant by lazy {

@@ -55,8 +55,11 @@ class DaylightGenerator() {
 
 fun main() {
     val d = DaylightGenerator()
-    val d55 = d.getDaylightSpectrumFromCCT(5500.0)
-    println(d55.spectrum)
-    println(d55.xyz.cct)
-    println(d55.xyz.xyY)
+    val soraa = readArgyllIlluminant("data/Soraa_5000k_Twosnapped_Lee400Hot.sp")
+    val ds = d.getDaylightSpectrumFromCCT(soraa.cct)
+    val sample = cricalc.samples[10]
+    print(sample.getXYZ(ds).lab)
+    print(sample.getXYZ(soraa).lab)
+//    print(soraa.xyz.xyY)
+//    print(soraa.spectrum)
 }

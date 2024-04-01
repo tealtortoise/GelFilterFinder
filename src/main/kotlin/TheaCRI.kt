@@ -43,14 +43,14 @@ class TheaCRICalculator() {
     }
 }
 
+val cricalc = TheaCRICalculator()
 fun main() {
-    val calc = TheaCRICalculator()
 
-    println(calc.samples.joinToString("\n"))
+    println(cricalc.samples.joinToString("\n"))
     println(D65.xyz.Y)
     println(D50.xyz.Y)
     println(D65.cct)
     println(D50.cct)
-    println(calc.samples[0].reflectanceSpectrum)
-    println(calc.samples[0].getXYZ(D50))
+    println(cricalc.samples[0].reflectanceSpectrum)
+    println(cricalc.samples[0].getXYZ(D50))
 }
