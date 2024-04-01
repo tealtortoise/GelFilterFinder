@@ -12,7 +12,7 @@ fun writeTSV(filters: List<GelFilter>) {
     val fmt = DecimalFormat("0.###E0")
     File("filtersfiltered.txt").printWriter().use { writer ->
         writer.println("nm\t" + filters.map { it.name }.joinToString(separator = "\t"))
-        val wavelengths = calc.wavelengthData5nm
+        val wavelengths = cieCalculator.wavelengthData5nm
         wavelengths.forEachIndexed { idx, wavelength ->
             val line = "$wavelength\t" + filters.map { fmt.format(it.spectrum.get(idx)) }
                 .joinToString(separator = "\t")

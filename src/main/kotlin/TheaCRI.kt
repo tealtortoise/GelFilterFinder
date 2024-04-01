@@ -2,9 +2,23 @@ package org.example
 
 import java.io.File
 
-data class ColourSample(val name: String, val spectrum: List<Double>)
+class ColourSample(val name: String, val reflectanceSpectrum: List<Double>) {
+    public fun getXYZ(illuminant: Illuminant = D65): CieXYZ {
+        return cieCalculator.spectrum5nmToXYZ(reflectanceSpectrum, illuminant=illuminant)
+    }
+
+    override fun toString(): String {
+        val xyz = getXYZ()
+        val xyY = xyz.xyY
+        val lab = cieCalculator.xyzToLab(xyz)
+        return "%,.3f, %,.3f, %,.3f | %,.3f, %,.3f, %,.3f".format(xyY.x_, xyY.y_, xyY.Y,
+            lab.L, lab.a, lab.b)
+    }
+}
 
 class TheaCRICalculator() {
+
+    public val samples: List<ColourSample>
 
     init {
         val ccsgData = File("CCSG.ti3").readText()
@@ -14,7 +28,7 @@ class TheaCRICalculator() {
         val samples = sampleLines.map { line ->
             val split = line.split(" ")
             val name = split[0]
-            val spectrum = split.subList(8, split.count() - 10).map { it.toDouble() }
+            val spectrum = split.subList(8, split.count() - 10).map { it.toDouble() * 0.01 }
             val spectrum5nm = (0..<wavelengthCount5nm).map { outIdx ->
                 if (outIdx % 2 == 0){
                     spectrum[outIdx / 2]
@@ -25,10 +39,16 @@ class TheaCRICalculator() {
             }
             ColourSample(name, spectrum5nm)
         }
-        println(samples.joinToString("\n"))
+        this.samples = samples
     }
 }
 
 fun main() {
     val calc = TheaCRICalculator()
+
+    println(calc.samples.joinToString("\n"))
+    println(D65.xyz.Y)
+    println(D50.xyz.Y)
+    println(calc.samples[0].reflectanceSpectrum)
+    println(calc.samples[0].getXYZ(D50))
 }

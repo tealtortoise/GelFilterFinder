@@ -46,3 +46,5 @@ bin/
 /.~lock.filters_by_row.txt#
 /data/.~lock.1931CMF.csv#
 /filtersfiltered.txt
+/data/CIE_std_illum_D50.csv:Zone.Identifier
+/CCSG.ti3:com.dropbox.attributes
