@@ -49,6 +49,8 @@ fun main() {
     println(calc.samples.joinToString("\n"))
     println(D65.xyz.Y)
     println(D50.xyz.Y)
+    println(D65.cct)
+    println(D50.cct)
     println(calc.samples[0].reflectanceSpectrum)
     println(calc.samples[0].getXYZ(D50))
 }

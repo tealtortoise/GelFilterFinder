@@ -45,6 +45,11 @@ class CieXYZ(val X: Double, val Y: Double, val Z:Double, val ref:Illuminant = D6
         val y = Y / (X + Y + Z)
         CiexyY(x, y, Y)
     }
+
+    public val cct by lazy {
+        cieCalculator.xyzToCCT(this)
+    }
+
 }
 
 data class CiexyY(val x_: Double, val y_: Double, val Y:Double)
@@ -54,6 +59,9 @@ data class CieLab(val L: Double, val a: Double, val b:Double)
 class Illuminant(val spectrum: IlluminantSpectrum, val name: String = "") {
     public val xyz by lazy {
         cieCalculator.spectrum5nmToXYZ(this.spectrum, illuminant = nullIlluminant)
+    }
+    public val cct by lazy {
+        this.xyz.cct
     }
 }
 
@@ -152,6 +160,20 @@ class CIECalculator {
         }
         return CieXYZ(outX, outY, outZ, illuminant)
     }
+
+    public fun xyzToCCT(xyz: CieXYZ): Double {
+        val xyY = xyz.xyY
+        val xe = 0.3320
+        val ye = 0.1858
+        val n = (xyY.x_ - xe) / (xyY.y_ - ye)
+        val cct = -449 * n.pow(3) + 3525 * n * n - 6823.3 * n + 5520.33
+        return cct
+    }
+    public fun xyzToxyY(xyz: CieXYZ): CiexyY {
+        val x = xyz.X / (xyz.X + xyz.Y + xyz.Z)
+        val y = xyz.Y / (xyz.X + xyz.Y + xyz.Z)
+        return CiexyY(x, y, xyz.Y)
+    }
 }
 
 val cieCalculator = CIECalculator()
@@ -162,10 +184,7 @@ class GelFilter(public var name: String, var spectrum: ReflectanceSpectrum) {
         cieCalculator.spectrum5nmToXYZ(this.spectrum)
     }
     public val xyY by lazy {
-        val xyz = this.xyz
-        val x = xyz.X / (xyz.X + xyz.Y + xyz.Z)
-        val y = xyz.Y / (xyz.X + xyz.Y + xyz.Z)
-        CiexyY(x, y, xyz.Y)
+        cieCalculator.xyzToxyY(this.xyz)
     }
 
     public val lab by lazy {
