@@ -1,5 +1,7 @@
 package org.example
 import java.io.File
+import kotlin.math.atan2
+import kotlin.math.pow
 
 val cmf1931path = "data/1931CMF.csv"
 val d65path = "data/CIE_std_illum_D65.csv"
@@ -9,12 +11,33 @@ const val endWavelength5nm = 700
 const val wavelengthCount5nm = (endWavelength5nm - startWavelength5nm) / 5 + 1
 
 
-data class CieXYZ(val X: Double, val Y: Double, val Z:Double)
+open class ThreeVector(val e1: Double,val  e2: Double, val e3:Double) {
+    open operator fun get(i: Int): Double {
+        return when (i) {
+            0 -> e1
+            1 -> e2
+            2 -> e3
+            else -> throw Exception("Invalid index '$i'")
+        }
+    }
+}
+//
+class CieXYZ_(val X: Double, val Y: Double, val Z:Double, val ref: Illuminant) : ThreeVector(X, Y, Z) {
+
+}
+
+class CieXYZ(val X: Double, val Y: Double, val Z:Double, val ref:Illuminant? = D65): ThreeVector(X, Y, Z) {
+}
 
 data class CiexyY(val x_: Double, val y_: Double, val Y:Double)
 
-data class Illuminant(val spectrum: List<Double>)
+data class CieLab(val L: Double, val a: Double, val b:Double)
 
+class Illuminant(val spectrum: List<Double>, val name: String = "") {
+    public val xyz by lazy {
+        calc.spectrum5nmToXYZ(this.spectrum, illuminant = nullIlluminant)
+    }
+}
 val D65: Illuminant by lazy {
     val csvData = File(d65path).readText()
     val startWavelength = 300
@@ -26,11 +49,20 @@ val D65: Illuminant by lazy {
     val total = out.sum()
     Illuminant(out.map { it / total / 0.36296688171995447})
 }
+
+val E: Illuminant by lazy {
+    Illuminant((1..wavelengthCount5nm).map { 1.0 / 21.3609212}, "E")
+}
+
+val nullIlluminant by lazy {
+    Illuminant((1..wavelengthCount5nm).map { 1.0 }, "null")
+}
+
 fun lineToList(line: String): List<Double> {
     return line.split(",").map { it.toDouble() }
 }
 class CIECalculator {
-    private var wavelengthData5nm: MutableList<Double> = mutableListOf()
+    public var wavelengthData5nm: MutableList<Double> = mutableListOf()
     private var cieXData: List<Double>
     private var cieYData: List<Double>
     private var cieZData: List<Double>
@@ -64,23 +96,35 @@ class CIECalculator {
         return ((nm - 400.0) / 5.0 + 0.5).toInt()
     }
 
-    public fun spectrum5nmToXYZ(spectrum: List<Double>): CieXYZ {
+    public fun xyzToLab(xyz: CieXYZ): CieLab {
+        val refIllum = xyz.ref ?: D65
+        val xr = xyz.X / refIllum.xyz.X
+        val yr = xyz.Y / refIllum.xyz.Y
+        val zr = xyz.Z / refIllum.xyz.Z
+        val e = 0.008856
+        val k = 903.3
+        val fx = if (xr > e) xr.pow(1.0/3.0) else (k*xr + 16) / 116
+        val fy = if (yr > e) yr.pow(1.0/3.0) else (k*yr + 16) / 116
+        val fz = if (yr > e) zr.pow(1.0/3.0) else (k*zr + 16) / 116
+        return CieLab(116 * fy - 16, 500 * (fx - fy), 200 * (fy - fz))
+    }
+    public fun spectrum5nmToXYZ(spectrum: List<Double>, illuminant: Illuminant=D65): CieXYZ {
         var outX = 0.0
         var outY = 0.0
         var outZ = 0.0
         for (idx in this.indexRange){
-            val d65 = D65.spectrum[idx]
-            outX += spectrum[idx] * this.cieXData5nm[idx] * d65
-            outY += spectrum[idx] * this.cieYData5nm[idx] * d65
-            outZ += spectrum[idx] * this.cieZData5nm[idx] * d65
+            val illum = illuminant.spectrum[idx]
+            outX += spectrum[idx] * this.cieXData5nm[idx] * illum
+            outY += spectrum[idx] * this.cieYData5nm[idx] * illum
+            outZ += spectrum[idx] * this.cieZData5nm[idx] * illum
         }
-        return CieXYZ(outX, outY, outZ)
+        return CieXYZ(outX, outY, outZ, illuminant)
     }
 }
 
 val calc = CIECalculator()
 
-class GelFilter(private var name: String, var spectrum: List<Double>) {
+class GelFilter(public var name: String, var spectrum: List<Double>) {
 
     public val xyz by lazy {
         calc.spectrum5nmToXYZ(this.spectrum)
@@ -92,6 +136,21 @@ class GelFilter(private var name: String, var spectrum: List<Double>) {
         CiexyY(x, y, xyz.Y)
     }
 
+    public val lab by lazy {
+        calc.xyzToLab(this.xyz)
+    }
+
+    public val hue by lazy {
+        atan2(this.lab.b, this.lab.a)
+    }
+    public val sat by lazy {
+        (this.lab.b * this.lab.b + this.lab.a * this.lab.a).pow(0.5)
+    }
+
+    public fun dilute(strength: Double): GelFilter {
+        val newSpec = this.spectrum.map { 1.0 - (1.0 - it) * strength }
+        return GelFilter(this.name + " %,.2fapp".format(strength), newSpec)
+    }
     override fun toString(): String {
         return "Gel Filter \"${this.name}\" x:${this.xyY.x_} y:${this.xyY.y_} Y:${this.xyY.Y}"
     }
