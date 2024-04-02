@@ -1,9 +1,7 @@
 package org.example
 import java.io.File
-import java.sql.Ref
 import kotlin.math.atan2
 import kotlin.math.pow
-import kotlin.system.exitProcess
 
 val cmf1931path = "data/1931CMF.csv"
 val d65path = "data/CIE_std_illum_D65.csv"
@@ -39,7 +37,7 @@ class CieXYZ_(val X: Double, val Y: Double, val Z:Double, val ref: Illuminant) :
 
 }
 
-class CieXYZ(val X: Double, val Y: Double, val Z:Double, val ref:Illuminant = D65): ThreeVector(X, Y, Z) {
+class CieXYZ(val X: Double, val Y: Double, val Z:Double, val refIlluminant: Illuminant): ThreeVector(X, Y, Z) {
 
     public val xyY by lazy {
         val x = X / (X + Y + Z)
@@ -51,7 +49,7 @@ class CieXYZ(val X: Double, val Y: Double, val Z:Double, val ref:Illuminant = D6
         cieCalculator.xyzToCCT(this)
     }
     public val lab by lazy {
-        cieCalculator.xyzToLab(this)
+        cieCalculator.xyzToLab( this)
     }
 
 }
@@ -69,7 +67,9 @@ class Illuminant(val spectrum: IlluminantSpectrum, val name: String = "") {
     }
 }
 
-fun readIlluminant(pathn: String, multiplier: Double): Illuminant {
+val cieCalculator = CIECalculator()
+
+fun readIlluminant(pathn: String, normalise: Boolean = true): Illuminant {
     val csvData = File(pathn).readText()
     val startWavelength = 300
     val wavelengthInc = 1
@@ -79,17 +79,20 @@ fun readIlluminant(pathn: String, multiplier: Double): Illuminant {
             lines[it * 5 + startWavelength5nm - startWavelength + offset].split(",")[1].toDouble()
         }.sum()
     }
-    val total = out.sum()
-    val ill =  Illuminant(out.map { it / total * multiplier} as IlluminantSpectrum)
+    val ill = Illuminant(out)
+    if (normalise) {
+        val xyz = cieCalculator.spectrum5nmToXYZ(ill.spectrum, nullIlluminant)
+        return Illuminant(ill.spectrum.map { it / xyz.Y })
+    }
     return ill
-//    val xyz = cieCalculator.spectrum5nmToXYZ(ill.spectrum, nullIlluminant)
-//    return Illuminant(ill.spectrum.map { it / xyz.Y })
 }
 
-fun readArgyllIlluminant(pathn: String): Illuminant {
+fun readArgyllIlluminant(pathn: String, normalise: Boolean = true): Illuminant {
     val csvData = File(pathn).readText()
     val lines = csvData.split("\n")
-    val rawspec = lines[18].trim().split(" ").map { it.toDouble() }
+    val beginLine = lines.indexOf("BEGIN_DATA")
+
+    val rawspec = lines[beginLine + 1].trim().split(" ").map { it.toDouble() }
     val spec = cieCalculator.indexRange.map {i ->
         if (i % 2 == 0) {
             rawspec[i /2 + 2]
@@ -97,14 +100,19 @@ fun readArgyllIlluminant(pathn: String): Illuminant {
             (rawspec[i/2 + 2] + rawspec[i/2 + 3]) / 2.0
         }
     }
-    return Illuminant(spec, name=pathn.split("/").last())
+    val illName = pathn.split("/").last()
+    if (normalise) {
+        val y = Illuminant(spec).xyz.Y
+        return Illuminant(spec.map { it / y }, illName)
+    }
+    return Illuminant(spec, name=illName)
 }
 
 val D65: Illuminant by lazy {
-    readIlluminant("data/CIE_std_illum_D65.csv", multiplier= 1.0 / 0.3629668817199543)
+    readIlluminant("data/CIE_std_illum_D65.csv", normalise = true)
 }
 val D50: Illuminant by lazy {
-    readIlluminant("data/CIE_std_illum_D50.csv", multiplier = 1.0 / 0.379067039711666)
+    readIlluminant("data/CIE_std_illum_D50.csv", normalise = true)
 }
 
 val E: Illuminant by lazy {
@@ -147,7 +155,6 @@ class CIECalculator {
             this.cieXData5nm.addLast(this.cieXData.get(index1nm))
             this.cieYData5nm.addLast(this.cieYData.get(index1nm))
             this.cieZData5nm.addLast(this.cieZData.get(index1nm))
-            val a = D65
         }
     }
     public fun wavelengthTo5nmIndex(nm: Double): Int {
@@ -155,7 +162,7 @@ class CIECalculator {
     }
 
     public fun xyzToLab(xyz: CieXYZ): CieLab {
-        val refIllum = xyz.ref
+        val refIllum = xyz.refIlluminant
         val xr = xyz.X / refIllum.xyz.X
         val yr = xyz.Y / refIllum.xyz.Y
         val zr = xyz.Z / refIllum.xyz.Z
@@ -193,8 +200,6 @@ class CIECalculator {
         return CiexyY(x, y, xyz.Y)
     }
 }
-
-val cieCalculator = CIECalculator()
 
 class GelFilter(public var name: String, var spectrum: ReflectanceSpectrum) {
 

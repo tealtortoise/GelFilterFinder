@@ -1,19 +1,40 @@
 package org.example
 
 import java.io.File
+import kotlin.math.pow
+
+typealias ColourDifference = Double
 
 class ColourSample(val name: String, val reflectanceSpectrum: List<Double>) {
-    public fun getXYZ(illuminant: Illuminant = D65): CieXYZ {
-        return cieCalculator.spectrum5nmToXYZ(reflectanceSpectrum, illuminant=illuminant)
+    public var colourDifference: ColourDifference? = null
+
+    public fun render(illuminant: Illuminant): CieXYZ {
+        val xyz_ = cieCalculator.spectrum5nmToXYZ(reflectanceSpectrum, illuminant=illuminant)
+        return xyz_
+    }
+
+    public fun renderAndAdapt(sourceIlluminant: Illuminant, matrix: CATMatrix): CieXYZ {
+        val adapted = applyMatrix(this.render(sourceIlluminant), matrix)
+        return adapted
     }
 
     override fun toString(): String {
-        val xyz = getXYZ()
+        val xyz = render(D65)
         val xyY = xyz.xyY
         val lab = cieCalculator.xyzToLab(xyz)
         return "%,.3f, %,.3f, %,.3f | %,.3f, %,.3f, %,.3f".format(xyY.x_, xyY.y_, xyY.Y,
             lab.L, lab.a, lab.b)
     }
+}
+
+val neutralSample = ColourSample("Neutral Reference Sample", cieCalculator.indexRange.map { 0.5 })
+
+fun abColourDifference(in1: CieXYZ, in2: CieXYZ): ColourDifference {
+    if (in1.refIlluminant.xyz != in2.refIlluminant.xyz) {
+        throw Exception("Reference illuminants do not match")
+    }
+
+    return ((in1.lab.a - in2.lab.a).pow(2) + (in1.lab.b - in2.lab.b).pow(2)).pow(0.5)
 }
 
 class TheaCRICalculator() {
@@ -52,5 +73,5 @@ fun main() {
     println(D65.cct)
     println(D50.cct)
     println(cricalc.samples[0].reflectanceSpectrum)
-    println(cricalc.samples[0].getXYZ(D50))
+    println(cricalc.samples[0].render(D50))
 }
