@@ -1,9 +1,10 @@
 package org.example
 
 import java.io.File
+import kotlin.math.exp
 import kotlin.math.pow
 
-class DaylightGenerator() {
+class SpectrumGenerator() {
     val s0List: MutableList<Double> = mutableListOf()
     val s1List: MutableList<Double> = mutableListOf()
     val s2List: MutableList<Double> = mutableListOf()
@@ -55,48 +56,30 @@ class DaylightGenerator() {
         return ill
     }
 
+    fun getBlackbodySpectrum(cct: CCT, normalise: Boolean = true): Illuminant {
+
+        val h = 6.626e-34
+        val c = 3.0e+8
+        val k = 1.38e-23
+
+        val a = 2.0*h*c.pow(2)
+        val spec = cieCalculator.wavelengthData5nm.map { nm ->
+            val m = nm * 1e-9
+            val b = h * c / (m * k * cct)
+            a / ( (m.pow(5)) * (exp(b) - 1.0) )
+        }
+        val ill = Illuminant(spec, "%,.0f Blackbody".format(cct))
+        if (normalise) {
+            val mult = 1.0  / ill.xyz.Y
+            return Illuminant(spec.map { it * mult }, name=ill.name)
+        }
+        return ill
+    }
 }
 
 fun main() {
-    val d = DaylightGenerator()
-    val basepath = "/mnt/argyll/Illuminants/"
-//    val soraa = readArgyllIlluminant("data/Soraa_5000k_Twosnapped_Lee400Hot.sp")
-//    val soraa = readArgyllIlluminant(basepath +"Philips_5.5w_Ra97_400lm_cool.sp")
-    val soraa = readArgyllIlluminant("data/Soraa_New60d_1_202gel_Lee400Hot.sp")
-//    val soraa = readArgyllIlluminant("data/NewSoraa_60d_1_Lee400Cold.sp")
-//    val soraa = d.getDaylightSpectrumFromCCT(5000.0)
-//    val soraa = readArgyllIlluminant(basepath + "6000kcheapled.sp")
-    println(soraa.cct)
-    val ds = d.getDaylightSpectrumFromCCT(soraa.cct)
-    val cam = getCATMatrix(soraa, ds)
-    println(ds.cct)
-    println(soraa.xyz.xyY)
-    println(ds.xyz.xyY)
-    val subset = cricalc.samples.filter {
-        if (it.name[0] == 'A' || it.name[0] == 'N'){
-            false
-        } else  if (it.name.takeLast(2).toInt() !in 2..9) {
-            false
-        } else {
-            true
-        }
-    }
-    subset.forEach {sample ->
-        val refCol = sample.render(ds)
-        val soraaCol = sample.render(soraa)
-        val adaptedSoraa = sample.renderAndAdapt(soraa, cam)
-        sample.colourDifference = abColourDifference(refCol, adaptedSoraa)
-    }
-    val sortedSamples = subset.sortedByDescending { it.colourDifference }
-    sortedSamples.forEach {
-        println(it.name + " " + it.colourDifference)
-    }
-    val rms = sortedSamples.map {
-        (it.colourDifference as ColourDifference).pow(2)
-    }.average().pow(0.5)
 
-    println("RMS Error %,.2f dE".format(rms))
-    println("TRI Rt %,.1f".format(100 - rms * 4.0))
+
 //    val sample = cricalc.samples[16]
 ////    val sample = neutralSample
 //    val refCol = sample.render(ds)

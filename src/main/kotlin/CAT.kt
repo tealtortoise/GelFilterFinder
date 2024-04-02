@@ -34,11 +34,17 @@ val bradfordinv = TwoDimMatrix(listOf(listOf( 0.98699291,  0.43230527, -0.008528
     listOf(-0.14705426,  0.51836027,  0.04004282),
             listOf(0.15996265,  0.04929123,  0.9684867)))
 
+val scaling = TwoDimMatrix(listOf(listOf(1.0, 0.0, 0.0), listOf(0.0, 1.0, 0.0), listOf(0.0, 0.0, 1.0)))
+val scalinginv = TwoDimMatrix(scaling.matrix.toList())
+
 fun getCATMatrix(inWhite: Illuminant, outWhite: Illuminant): CATMatrix {
     val m = bradford
     val m1 = bradfordinv
 //    val m = cat16
 //    val m1 = cat16inv
+//    val m = scaling
+//    val m1 = scalinginv
+
     val lmsInWhite = matmul(inWhite.xyz, m)
     val lmsOutWhite = matmul(outWhite.xyz, m)
     val lRatio = lmsOutWhite[0] / lmsInWhite [0]
@@ -78,9 +84,9 @@ fun main() {
 //    val cam1 = getCATMatrix(CieXYZ(0.964220, 1.0, 0.825210), CieXYZ(0.950470, 1.0, 1.088830))
 //    println(cam1)
     println(D50.xyz)
-    println(applyMatrix(D65.xyz, cam))
-    println(applyMatrix(D50.xyz, cam))
-    println(applyMatrix(CieXYZ(1.0,2.0,3.0, D50), cam))
+    println(applyMatrix(CieXYZ(0.2,0.3,0.4, D65), cam))
+//    println(applyMatrix(D50.xyz, cam))
+//    println(applyMatrix(CieXYZ(1.0,2.0,3.0, D50), cam))
 //    println(getCATMatrix(CieXYZ(0.964220, 1.0, 0.825210), CieXYZ(0.950470, 1.0, 1.088830)))
 
 

@@ -1,6 +1,8 @@
 package org.example
 import java.io.File
 import kotlin.math.atan2
+import kotlin.math.ceil
+import kotlin.math.floor
 import kotlin.math.pow
 
 val cmf1931path = "data/1931CMF.csv"
@@ -93,12 +95,28 @@ fun readArgyllIlluminant(pathn: String, normalise: Boolean = true): Illuminant {
     val beginLine = lines.indexOf("BEGIN_DATA")
 
     val rawspec = lines[beginLine + 1].trim().split(" ").map { it.toDouble() }
-    val spec = cieCalculator.indexRange.map {i ->
-        if (i % 2 == 0) {
-            rawspec[i /2 + 2]
-        } else {
-            (rawspec[i/2 + 2] + rawspec[i/2 + 3]) / 2.0
+
+    val spec = if (rawspec.count() == 36) {
+        cieCalculator.indexRange.map { i ->
+            if (i % 2 == 0) {
+                rawspec[i / 2 + 2]
+            } else {
+                (rawspec[i / 2 + 2] + rawspec[i / 2 + 3]) / 2.0
+            }
         }
+    } else if (rawspec.count() == 109) {
+        cieCalculator.indexRange.map { i ->
+            val argyllIndex = i * 1.5 + 9
+            if (argyllIndex == floor(argyllIndex)) {
+                rawspec[argyllIndex.toInt()]
+            } else {
+                val lower = rawspec[floor(argyllIndex).toInt()]
+                val higher = rawspec[ceil(argyllIndex).toInt()]
+                (lower + higher) / 2.0
+            }
+        }
+    } else {
+        throw Exception("Unknown Argyll format")
     }
     val illName = pathn.split("/").last()
     if (normalise) {
