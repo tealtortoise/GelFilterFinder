@@ -61,9 +61,10 @@ fun main() {
     val filterDataLines = File("filters_by_row.txt").readText().split("\n")
 //    val baseIlluminant = readArgyllIlluminant("data/NewSoraa_60d_1_Lee400Cold.sp")
     val baseIlluminant = readArgyllIlluminant("data/Soraa_5000k_Twosnapped_Lee400Hot.sp")
-    val target_cct: CCT = 6500.0
-    val target_duv: Duv = 0.0025
-    val filters = filterDataLines.takeLast(filterDataLines.count()-1)
+    val target_cct: CCT = 5700.0
+    val target_duv: Duv = 0.002
+    val outResults = mutableListOf<FilterTestResult>()
+    val filters = filterDataLines
         .filter {
             it.count() > 1
         }
@@ -74,37 +75,54 @@ fun main() {
             gel
         }
         .filter {
-//            it.hue < -0.3 * PI && it.hue > -0.7 * PI
-            true
+            it.name != "name"
         }
+//        .take(50)
         .map {gel ->
-            (1..10).map { gel.dilute(it * 0.1) }
+            listOf(1.0, 0.8, 0.6, 0.45, 0.3, 0.15, 0.08).map { gel.dilute(it) }
         }
         .flatten()
-        .map {
-            val filteredSpecrum = it.getFilteredSpectrum(baseIlluminant)
-            val illum = Illuminant(filteredSpecrum,"Base filtered by ${it.name}")
+        .filter {
+            val duv = calcUVColourDifference(it.d65xyz, D65.xyz)
+            abs(duv) < 0.03 &&
+                    it.getXYZ(baseIlluminant).cct in baseIlluminant.cct.cct-500..target_cct+500
+        }
+        .filter {
+            it.getXYZ(baseIlluminant).Y > 0.45
+        }
+    println(filters.count())
+//        .take(200)
 
+    for (a in 0..<filters.count()){
+        println("$a (found ${outResults.count()})")
+        for (b in 0..<filters.count()) {
+            val filter_a = filters[a]
+            val filter_b = filters[b]
+            val composteSpec = filter_a.spectrum.mapIndexed { index, d -> filter_b.spectrum[index] * d }
+            val compositeFilter = GelFilter("${filter_a.name} and ${filter_b.name}", composteSpec)
+            val filteredSpectrum = compositeFilter.getFilteredSpectrum(baseIlluminant)
+            val illum = Illuminant(filteredSpectrum, "Base filtered by ${compositeFilter.name}")
             val cctresult = illum.cct
             if (cctresult.cct in 2200.0..20000.0) {
                 val rt = cricalc.calculateRt(illum)
-                val weight_CCT = 0.1
-                val weight_Duv = 1.0
-                val weight_Rt = 1.5
-                val weight_Y = 0.2
+                val weight_CCT =0.2
+                val weight_Duv = 0.3
+                val weight_Rt = 2.5
+                val weight_Y = 1.0
                 val score = ((cctresult.cct - target_cct) / 100).pow(2) * weight_CCT +
                         ((cctresult.duv - target_duv) * 1000).pow(2) * weight_Duv +
                         ((100 - rt.rt) * 0.5).pow(2) * weight_Rt +
-                        (1.0 - illum.xyz.Y) * 2 * weight_Y
-                it.score = score
-                FilterTestResult(it, illum, score, cctresult, rt)
-            } else {
-                null
+                        (1.0 - illum.xyz.Y).pow(2) * 20 * weight_Y
+                compositeFilter.score = score
+                if (abs(cctresult.cct - target_cct) < 500 && illum.xyz.Y > 0.45
+                    && abs(cctresult.duv - target_duv) < 0.0025) {
+                    val result = FilterTestResult(compositeFilter, illum, score, cctresult, rt)
+                    outResults.addLast(result)
+                }
             }
-        }.filter {
-            it != null
         }
-    val sortedFilters = filters.sortedBy { (it as FilterTestResult).score }
+    }
+    val sortedFilters = outResults.sortedBy { (it as FilterTestResult).score }
     sortedFilters.take(50).forEach { println(it) }
     writeTSV(sortedFilters.take(50).map { (it as FilterTestResult).filter })
     println("Found ${filters.count()} filters")
