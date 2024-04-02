@@ -19,6 +19,9 @@ typealias IlluminantSpectrum = List<Double>
 typealias CMF = List<Double>
 typealias MutableCMF = MutableList<Double>
 typealias CCT = Double
+typealias Duv = Double
+
+data class CCTResult(val cct: CCT, val duv: Duv)
 
 open class ThreeVector(val e1: Double,val  e2: Double, val e3:Double) {
     open operator fun get(i: Int): Double {
@@ -48,7 +51,7 @@ class CieXYZ(val X: Double, val Y: Double, val Z:Double, val refIlluminant: Illu
     }
 
     public val cct by lazy {
-        cieCalculator.xyzToCCT(this)
+        cieCalculator.xyzToSimpleCCT(this)
     }
     public val lab by lazy {
         cieCalculator.xyzToLab( this)
@@ -62,10 +65,13 @@ data class CieLab(val L: Double, val a: Double, val b:Double)
 
 class Illuminant(val spectrum: IlluminantSpectrum, val name: String = "") {
     public val xyz by lazy {
-        cieCalculator.spectrum5nmToXYZ(this.spectrum, illuminant = nullIlluminant)
+        cieCalculator.spectrum5nmToXYZ(this.spectrum)
     }
-    public val cct by lazy {
+    public val cctonly: CCT by lazy {
         this.xyz.cct
+    }
+    public val cct: CCTResult by lazy {
+        cieCalculator.xyzToCCT(this.xyz)
     }
 }
 
@@ -83,7 +89,7 @@ fun readIlluminant(pathn: String, normalise: Boolean = true): Illuminant {
     }
     val ill = Illuminant(out)
     if (normalise) {
-        val xyz = cieCalculator.spectrum5nmToXYZ(ill.spectrum, nullIlluminant)
+        val xyz = cieCalculator.legacySpectrum5nmToXYZ(ill.spectrum, nullIlluminant)
         return Illuminant(ill.spectrum.map { it / xyz.Y })
     }
     return ill
@@ -191,20 +197,32 @@ class CIECalculator {
         val fz = if (yr > e) zr.pow(1.0/3.0) else (k*zr + 16) / 116
         return CieLab(116 * fy - 16, 500 * (fx - fy), 200 * (fy - fz))
     }
-    public fun spectrum5nmToXYZ(spectrum: List<Double>, illuminant: Illuminant=D65): CieXYZ {
+    public fun legacySpectrum5nmToXYZ(transmissionSpectrum: TransmissionSpectrum, illuminant: Illuminant= nullIlluminant): CieXYZ {
         var outX = 0.0
         var outY = 0.0
         var outZ = 0.0
         for (idx in this.indexRange){
             val illum = illuminant.spectrum[idx]
-            outX += spectrum[idx] * this.cieXData5nm[idx] * illum
-            outY += spectrum[idx] * this.cieYData5nm[idx] * illum
-            outZ += spectrum[idx] * this.cieZData5nm[idx] * illum
+            outX += transmissionSpectrum[idx] * this.cieXData5nm[idx] * illum
+            outY += transmissionSpectrum[idx] * this.cieYData5nm[idx] * illum
+            outZ += transmissionSpectrum[idx] * this.cieZData5nm[idx] * illum
         }
         return CieXYZ(outX, outY, outZ, illuminant)
     }
+    public fun spectrum5nmToXYZ(spectrum: IlluminantSpectrum, refIlluminant: Illuminant = nullIlluminant): CieXYZ {
+        var outX = 0.0
+        var outY = 0.0
+        var outZ = 0.0
+        for (idx in this.indexRange) {
+            val illum = spectrum[idx]
+            outX += this.cieXData5nm[idx] * illum
+            outY += this.cieYData5nm[idx] * illum
+            outZ += this.cieZData5nm[idx] * illum
+        }
+        return CieXYZ(outX, outY, outZ, refIlluminant)
+    }
 
-    public fun xyzToCCT(xyz: CieXYZ): Double {
+    public fun xyzToSimpleCCT(xyz: CieXYZ): CCT {
         val xyY = xyz.xyY
         val xe = 0.3320
         val ye = 0.1858
@@ -212,6 +230,21 @@ class CIECalculator {
         val cct = -449 * n.pow(3) + 3525 * n * n - 6823.3 * n + 5520.33
         return cct
     }
+    public fun xyzToCCT(xyz: CieXYZ): CCTResult {
+        fun xyYToCCT(xyY: CiexyY): CCT {
+            val xyY = xyz.xyY
+            val xe = 0.3320
+            val ye = 0.1858
+            val n = (xyY.x_ - xe) / (xyY.y_ - ye)
+            val cct = -449 * n.pow(3) + 3525 * n * n - 6823.3 * n + 5520.33
+            return cct
+        }
+        val cct = xyYToCCT(xyz.xyY)
+        val bbSpec = spectrumGenerator.getBlackbodySpectrum(cct, normalise = false)
+        val duv = calcUVColourDifference(bbSpec.xyz, xyz)
+        return CCTResult(cct, duv)
+    }
+
     public fun xyzToxyY(xyz: CieXYZ): CiexyY {
         val x = xyz.X / (xyz.X + xyz.Y + xyz.Z)
         val y = xyz.Y / (xyz.X + xyz.Y + xyz.Z)
@@ -220,23 +253,30 @@ class CIECalculator {
 }
 
 class GelFilter(public var name: String, var spectrum: ReflectanceSpectrum) {
+    public var score = 0.0
 
-    public val xyz by lazy {
-        cieCalculator.spectrum5nmToXYZ(this.spectrum)
+    public val d65xyz by lazy {
+        cieCalculator.legacySpectrum5nmToXYZ(this.spectrum, D65)
     }
-    public val xyY by lazy {
-        cieCalculator.xyzToxyY(this.xyz)
+    fun getXYZ(illuminant: Illuminant): CieXYZ {
+        return cieCalculator.spectrum5nmToXYZ(getFilteredSpectrum(illuminant), refIlluminant = illuminant)
+    }
+    fun getFilteredSpectrum(illuminant: Illuminant): IlluminantSpectrum {
+        return illuminant.spectrum.mapIndexed() { i, value -> this.spectrum[i] * value}
+    }
+    public val d65xyY by lazy {
+        cieCalculator.xyzToxyY(this.d65xyz)
     }
 
-    public val lab by lazy {
-        cieCalculator.xyzToLab(this.xyz)
+    public val d65lab by lazy {
+        cieCalculator.xyzToLab(this.d65xyz)
     }
 
     public val hue by lazy {
-        atan2(this.lab.b, this.lab.a)
+        atan2(this.d65lab.b, this.d65lab.a)
     }
     public val sat by lazy {
-        (this.lab.b * this.lab.b + this.lab.a * this.lab.a).pow(0.5)
+        (this.d65lab.b * this.d65lab.b + this.d65lab.a * this.d65lab.a).pow(0.5)
     }
 
     public fun dilute(strength: Double): GelFilter {
@@ -244,7 +284,7 @@ class GelFilter(public var name: String, var spectrum: ReflectanceSpectrum) {
         return GelFilter(this.name + " %,.2fapp".format(strength), newSpec)
     }
     override fun toString(): String {
-        return "Gel Filter \"${this.name}\" x:${this.xyY.x_} y:${this.xyY.y_} Y:${this.xyY.Y}"
+        return "Gel Filter \"${this.name}\" x:${this.d65xyY.x_} y:${this.d65xyY.y_} Y:${this.d65xyY.Y} Score :${this.score}"
     }
 }
 

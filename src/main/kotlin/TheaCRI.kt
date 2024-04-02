@@ -2,7 +2,6 @@ package org.example
 
 import java.io.File
 import kotlin.math.pow
-import java.lang.NumberFormatException
 import kotlin.math.abs
 
 typealias ABColourDifference = Double
@@ -12,7 +11,7 @@ class ColourSample(val name: String, val reflectanceSpectrum: List<Double>) {
     public var colourDifference: ABColourDifference? = null
 
     public fun render(illuminant: Illuminant): CieXYZ {
-        val xyz_ = cieCalculator.spectrum5nmToXYZ(reflectanceSpectrum, illuminant=illuminant)
+        val xyz_ = cieCalculator.legacySpectrum5nmToXYZ(reflectanceSpectrum, illuminant=illuminant)
         return xyz_
     }
 
@@ -88,7 +87,7 @@ class TheaCRICalculator() {
     }
 
     fun calculateRt(testIllum: Illuminant): TheaCRIResult {
-        val cct = testIllum.cct
+        val cct = testIllum.cctonly
         var refLight = if (cct < 4000.0) {
             spectrumGenerator.getBlackbodySpectrum(cct)
         } else if (cct in 4000.0..5000.0) {
@@ -134,15 +133,10 @@ class TheaCRICalculator() {
 }
 
 val cricalc = TheaCRICalculator()
-fun main() {
+
+fun getTRIAllArgyllIlluminants() {
 
     val basepath = "/mnt/argyll/Illuminants/"
-    var filename = "Osram_9.5W_4000K_Lee400Hot.sp"
-    filename = "NewSoraa_36d_1_Lee400Cold.sp"
-    filename = "HiLine_6.5w_4000k_36d_HotLee400.sp"
-    filename = "5000k_Ra80_CFL.sp"
-    filename = "2700kCheapLED.sp"
-    filename = "Hallway_Ikea_2700K_aged.sp"
 
     val dir = File(basepath).listFiles()
     val spFiles = dir.filter { it.path.endsWith(".sp") }
@@ -160,7 +154,9 @@ fun main() {
             catch (e: java.lang.NumberFormatException) {}
         }
     }
-    println(co)
+}
+
+fun main() {
 //    filename = "Osram_11W_GLS_4000K_Ra90_Lee400Warm.sp"
 //    filename = "Bell_Pro_6w_4000k_Lee400_Hot.sp"
 //    filename = "Soraa_5000k_Twosnapped_Lee400Hot.sp"
