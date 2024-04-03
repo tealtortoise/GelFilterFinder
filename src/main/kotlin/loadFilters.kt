@@ -3,6 +3,7 @@ import java.io.File
 import java.text.DecimalFormat
 import kotlin.math.PI
 import kotlin.math.abs
+import kotlin.math.log
 import kotlin.math.pow
 
 fun writeTSV(filters: List<GelFilter>) {
@@ -51,7 +52,7 @@ class FilterTestResult(val filter: GelFilter,val resultingIlluminant: Illuminant
                        val score: Double, val cctResult: CCTResult,
     val theaCRIResult: TheaCRIResult){
     override fun toString(): String {
-        return "${filter.name}: Score: $score, CCT: ${cctResult.cct}, " +
+        return "${filter.name}:\nScore: $score, CCT: ${cctResult.cct}, " +
                 "Duv: ${cctResult.duv}, Rt: ${theaCRIResult.rt}, Y: ${resultingIlluminant.xyz.Y}"
     }
 }
@@ -59,10 +60,20 @@ class FilterTestResult(val filter: GelFilter,val resultingIlluminant: Illuminant
 
 fun main() {
     val filterDataLines = File("filters_by_row.txt").readText().split("\n")
-//    val baseIlluminant = readArgyllIlluminant("data/NewSoraa_60d_1_Lee400Cold.sp")
-    val baseIlluminant = readArgyllIlluminant("data/Soraa_5000k_Twosnapped_Lee400Hot.sp")
-    val target_cct: CCT = 5700.0
-    val target_duv: Duv = 0.002
+    //val baseIlluminant = readArgyllIlluminant("data/NewSoraa_60d_1_Lee400Cold.sp")
+//    val baseIlluminant = readArgyllIlluminant("/mnt/argyll/Illuminants/6000kcheapled.sp")
+    val baseIlluminant = readArgyllIlluminant("/mnt/argyll/Illuminants/HiLine_6.5w_4000k_36d_HotLee400.sp")
+//    val baseIlluminant = readArgyllIlluminant("data/Soraa_5000k_Twosnapped_Lee400Hot.sp")
+    println(cricalc.calculateRt(baseIlluminant))
+    val target_cct: CCT = 5900.0
+    val idealIlluminant = spectrumGenerator.getDaylightSpectrumFromCCT(target_cct)
+    val baseIlluminantCCT = baseIlluminant.cct
+    val target_duv = idealIlluminant.cct.duv
+    val idealYuv = idealIlluminant.yuv
+    val idealCCTduv = 0.0010//idealIlluminant.cct.duv
+    val yuvTolerance = 0.01
+    val cctTolerance = 100
+    val duvTolerance = 0.0011
     val outResults = mutableListOf<FilterTestResult>()
     val filters = filterDataLines
         .filter {
@@ -79,52 +90,62 @@ fun main() {
         }
 //        .take(50)
         .map {gel ->
-            listOf(1.0, 0.8, 0.6, 0.45, 0.3, 0.15, 0.08).map { gel.dilute(it) }
+            val dilutes = (0..20).map { 2.0.pow(-it / 2.5) }
+            dilutes.map { gel.dilute(it) }
         }
         .flatten()
         .filter {
             val duv = calcUVColourDifference(it.d65xyz, D65.xyz)
-            abs(duv) < 0.03 &&
-                    it.getXYZ(baseIlluminant).cct in baseIlluminant.cct.cct-500..target_cct+500
+            abs(duv) in 0.0011..0.1
+//            true
         }
         .filter {
-            it.getXYZ(baseIlluminant).Y > 0.45
+            it.getXYZ(baseIlluminant).Y > 0.42
         }
     println(filters.count())
 //        .take(200)
 
     for (a in 0..<filters.count()){
-        println("$a (found ${outResults.count()})")
-        for (b in 0..<filters.count()) {
+        val count = outResults.count()
+        if (a % 100 == 0) println("$a (found $count)")
+        for (b in a..<filters.count()) {
+            if (a == b) continue
             val filter_a = filters[a]
             val filter_b = filters[b]
-            val composteSpec = filter_a.spectrum.mapIndexed { index, d -> filter_b.spectrum[index] * d }
-            val compositeFilter = GelFilter("${filter_a.name} and ${filter_b.name}", composteSpec)
+            val compositeFilter = filter_b + filter_a
             val filteredSpectrum = compositeFilter.getFilteredSpectrum(baseIlluminant)
             val illum = Illuminant(filteredSpectrum, "Base filtered by ${compositeFilter.name}")
+
+            if (illum.xyz.Y < 0.45) continue
+
+            if (abs(cieCalculator.uvColourDifference(idealYuv, illum.yuv)) > yuvTolerance) continue
+
             val cctresult = illum.cct
-            if (cctresult.cct in 2200.0..20000.0) {
-                val rt = cricalc.calculateRt(illum)
-                val weight_CCT =0.2
-                val weight_Duv = 0.3
-                val weight_Rt = 2.5
-                val weight_Y = 1.0
-                val score = ((cctresult.cct - target_cct) / 100).pow(2) * weight_CCT +
-                        ((cctresult.duv - target_duv) * 1000).pow(2) * weight_Duv +
-                        ((100 - rt.rt) * 0.5).pow(2) * weight_Rt +
-                        (1.0 - illum.xyz.Y).pow(2) * 20 * weight_Y
-                compositeFilter.score = score
-                if (abs(cctresult.cct - target_cct) < 500 && illum.xyz.Y > 0.45
-                    && abs(cctresult.duv - target_duv) < 0.0025) {
-                    val result = FilterTestResult(compositeFilter, illum, score, cctresult, rt)
-                    outResults.addLast(result)
-                }
+            if (abs(cctresult.duv - target_duv) > duvTolerance) continue
+            if (abs(cctresult.cct - target_cct) > cctTolerance) continue
+
+//            if (cricalc.calculateRt(illum, idealIlluminant).rt < 83) continue
+
+            val rt = cricalc.calculateRt(illum)
+            if (rt.rt < 90) continue
+
+            if (abs(cctresult.duv - idealCCTduv) > yuvTolerance) continue
+            val weight_Rt = 2.0
+            val weight_Y = 1.0
+            val miredShift = 1e6 / cctresult.cct - 1e6 / baseIlluminantCCT.cct
+            val miredComp = 2.0.pow(-abs(miredShift) / 170.0)
+            val score = (1.0 - illum.xyz.Y).pow(2) * 95 * weight_Y +
+                    ((100 - rt.rt) * 0.5).pow(2) * weight_Rt
+            compositeFilter.score = score * miredComp
+            val result = FilterTestResult(compositeFilter, illum, compositeFilter.score, cctresult, rt)
+            outResults.addLast(result)
             }
         }
+    val sortedFilters = outResults.sortedBy { -(it as FilterTestResult).score }
+    sortedFilters.takeLast(10).forEach {
+        println(it)
     }
-    val sortedFilters = outResults.sortedBy { (it as FilterTestResult).score }
-    sortedFilters.take(50).forEach { println(it) }
-    writeTSV(sortedFilters.take(50).map { (it as FilterTestResult).filter })
+    writeTSV(sortedFilters.takeLast(8).map { (it as FilterTestResult).filter })
     println("Found ${filters.count()} filters")
     println(clearFilter)
     println(D65.xyz)

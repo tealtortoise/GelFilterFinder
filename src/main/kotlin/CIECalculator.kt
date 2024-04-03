@@ -4,6 +4,7 @@ import kotlin.math.atan2
 import kotlin.math.ceil
 import kotlin.math.floor
 import kotlin.math.pow
+import kotlin.math.max
 
 val cmf1931path = "data/1931CMF.csv"
 val d65path = "data/CIE_std_illum_D65.csv"
@@ -20,6 +21,7 @@ typealias CMF = List<Double>
 typealias MutableCMF = MutableList<Double>
 typealias CCT = Double
 typealias Duv = Double
+
 
 data class CCTResult(val cct: CCT, val duv: Duv)
 
@@ -39,8 +41,9 @@ open class ThreeVector(val e1: Double,val  e2: Double, val e3:Double) {
 }
 //
 class CieXYZ_(val X: Double, val Y: Double, val Z:Double, val ref: Illuminant) : ThreeVector(X, Y, Z) {
-
 }
+
+class Yuv(val Y: Double, val u: Double, val v: Double): ThreeVector(Y, u, v) {}
 
 class CieXYZ(val X: Double, val Y: Double, val Z:Double, val refIlluminant: Illuminant): ThreeVector(X, Y, Z) {
 
@@ -72,6 +75,9 @@ class Illuminant(val spectrum: IlluminantSpectrum, val name: String = "") {
     }
     public val cct: CCTResult by lazy {
         cieCalculator.xyzToCCT(this.xyz)
+    }
+    public val yuv: Yuv by lazy {
+        cieCalculator.xyzToYuv(this.xyz)
     }
 }
 
@@ -250,9 +256,28 @@ class CIECalculator {
         val y = xyz.Y / (xyz.X + xyz.Y + xyz.Z)
         return CiexyY(x, y, xyz.Y)
     }
+
+    fun xyYToYuv(xyY: CiexyY): Yuv {
+        val u = (4 * xyY.x_) / (-2 * xyY.x_ + 12 * xyY.y_ + 3)
+        val v = (6 * xyY.y_) / (-2 * xyY.x_ + 12 * xyY.y_ + 3)
+        return Yuv(xyY.Y, u, v)
+    }
+
+    fun xyzToYuv(xyz: CieXYZ): Yuv {
+        return xyYToYuv(xyzToxyY(xyz))
+    }
+
+    fun uvColourDifference(refYuv: Yuv, testYuv: Yuv): Double {
+        val dif = ((refYuv.u - testYuv.u).pow(2) + (refYuv.v - testYuv.v).pow(2)).pow(0.5)
+        if (refYuv.v < testYuv.v) {
+            return dif
+        }
+        return -dif
+    }
+
 }
 
-class GelFilter(public var name: String, var spectrum: ReflectanceSpectrum) {
+class GelFilter(public var name: String, var spectrum: ReflectanceSpectrum,val dilutedBy: Double = 1.0) {
     public var score = 0.0
 
     public val d65xyz by lazy {
@@ -281,8 +306,35 @@ class GelFilter(public var name: String, var spectrum: ReflectanceSpectrum) {
 
     public fun dilute(strength: Double): GelFilter {
         val newSpec: ReflectanceSpectrum = this.spectrum.map { 1.0 - (1.0 - it) * strength }
-        return GelFilter(this.name + " %,.2fapp".format(strength), newSpec)
+        val g = GelFilter(this.name + " %,.2fapp".format(strength), newSpec, dilutedBy = strength)
+        return  g
     }
+
+    private fun undilutedSpec(): TransmissionSpectrum {
+        return this.spectrum.map { 1.0 - (1.0 - it) / this.dilutedBy }
+    }
+
+    operator fun plus(other: GelFilter): GelFilter {
+        val simplyStack: Boolean = ((this.dilutedBy + other.dilutedBy) > 1.9)
+        val composteSpec = if (simplyStack) {
+            // Stack filters ( multiplicative colour )
+            this.spectrum.mapIndexed { index, d -> other.spectrum[index] * d }
+        } else {
+            // Side by side (Additive colour)
+            val thisUndiluted = this.undilutedSpec()
+            val otherUndilited = other.undilutedSpec()
+            val leftOver = max(this.dilutedBy + other.dilutedBy - 1, 0.0)
+            thisUndiluted.mapIndexed { index, d ->
+                val aContrib = (1.0 - d) * (this.dilutedBy - leftOver)
+                val bContrib = (1.0 - otherUndilited[index]) * (other.dilutedBy - leftOver)
+                val stackedContrib = (1.0 - (d * otherUndilited[index])) * leftOver
+                (1.0 - aContrib - bContrib - stackedContrib)
+            }
+        }
+        val compositeFilter = GelFilter("${this.name} + ${other.name} ${if (simplyStack) "(Stacked)" else ""}", composteSpec)
+        return compositeFilter
+    }
+
     override fun toString(): String {
         return "Gel Filter \"${this.name}\" x:${this.d65xyY.x_} y:${this.d65xyY.y_} Y:${this.d65xyY.Y} Score :${this.score}"
     }
@@ -290,3 +342,23 @@ class GelFilter(public var name: String, var spectrum: ReflectanceSpectrum) {
 
 
 val clearFilter = GelFilter("Null (Clear) filter", cieCalculator.indexRange.map { 1.0 })
+
+fun calcUVColourDifference(refXYZ: CieXYZ, testXYZ: CieXYZ): UVColourDifference {
+    val u1 = (4*refXYZ.xyY.x_) / (-2*refXYZ.xyY.x_ + 12*refXYZ.xyY.y_ + 3)
+    val v1 = (6*refXYZ.xyY.y_) / (-2*refXYZ.xyY.x_ + 12*refXYZ.xyY.y_ + 3)
+    val u2 = (4*testXYZ.xyY.x_) / (-2*testXYZ.xyY.x_ + 12*testXYZ.xyY.y_ + 3)
+    val v2 = (6*testXYZ.xyY.y_) / (-2*testXYZ.xyY.x_ + 12*testXYZ.xyY.y_ + 3)
+    val dif = ((u1 - u2).pow(2) + (v1 - v2).pow(2)).pow(0.5)
+    if (refXYZ.xyY.y_ < testXYZ.xyY.y_) {
+        return dif
+    }
+    return -dif
+}
+
+fun main() {
+    val illum = D65
+    println(D65.xyz.Y)
+    println(D65.xyz.Y)
+    println(D65.xyz.Y)
+    println(D65.xyz.Y)
+}
