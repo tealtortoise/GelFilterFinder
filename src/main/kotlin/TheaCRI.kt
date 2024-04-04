@@ -30,9 +30,17 @@ class ColourSample(val name: String, val reflectanceSpectrum: List<Double>) {
 }
 val neutralSample = ColourSample("Neutral Reference Sample", cieCalculator.indexRange.map { 0.5 })
 
-class TheaCRIResult(val rt: Double,val cct: CCT, val refIllum: Illuminant, val duv: UVColourDifference) {
+class TheaCRIResult(val rt: Double,val cct: CCT, val refIllum: Illuminant,
+                    val duv: UVColourDifference, val sampleScores: List<Pair<String, Double>>, val resulttype: RtSampleSet) {
     override fun toString(): String {
-        return "Colour rendering Rt %.1f, CCT %.0fK Duv %.4f".format(rt, cct, duv)
+        return when (resulttype) {
+                RtSampleSet.TM30 -> "Colour rendering Rt %.1f, CCT %.0fK Duv %.4f, 14 %,.1f".format(
+                    rt, cct, duv, sampleScores[14].second)
+                RtSampleSet.CRI -> "Colour rendering Rt %.1f, CCT %.0fK Duv %.4f, R9 %,.1f".format(
+                    rt, cct, duv, sampleScores[8].second)
+                RtSampleSet.CCSG -> "Colour rendering Rt %.1f, CCT %.0fK Duv %.4f".format(rt, cct, duv)
+        }
+//        return "Colour rendering Rt %.1f, CCT %.0fK Duv %.4f".format(rt, cct, duv)
     }
 }
 
@@ -53,7 +61,7 @@ enum class RtSampleSet {
 }
 class TheaCRICalculator(set: RtSampleSet) {
     public val samples: List<ColourSample>
-    public val sampleSet: RtSampleSet
+    public val sampleSetType: RtSampleSet
 
     init {
         this.samples = when (set) {
@@ -61,7 +69,7 @@ class TheaCRICalculator(set: RtSampleSet) {
             RtSampleSet.CRI -> readCRISamples()
             RtSampleSet.TM30 -> readTM30Samples()
         }
-        this.sampleSet = set
+        this.sampleSetType = set
     }
 
     private fun readCCSGSamples(): List<ColourSample> {
@@ -129,7 +137,7 @@ class TheaCRICalculator(set: RtSampleSet) {
             }
         val cam = getCATMatrix(testIllum, refLight)
 
-        val subset = if (this.sampleSet == RtSampleSet.CCSG) {
+        val subset = if (this.sampleSetType == RtSampleSet.CCSG) {
             if (quick) {
                 val subsetNames = listOf("E04", "F04", "G04", "H04", "I04", "J04")
                 cricalc.samples.filter { it.name in subsetNames }
@@ -150,7 +158,7 @@ class TheaCRICalculator(set: RtSampleSet) {
         subset.forEach {sample ->
             val refCol = sample.render(refLight)
             val adaptedTest = sample.renderAndAdapt(testIllum, cam)
-            sample.colourDifference = abColourDifference(refCol, adaptedTest)
+            sample.colourDifference = abColourDifference(refCol, adaptedTest) as ABColourDifference
         }
 //        val sortedSamples = subset.sortedByDescending { it.colourDifference }
 //        sortedSamples.forEach {
@@ -160,9 +168,12 @@ class TheaCRICalculator(set: RtSampleSet) {
 //            (it.colourDifference as ABColourDifference).pow(2)
             abs(it.colourDifference as ABColourDifference)
         }.average()//.pow(0.5)
-
+        val indivividualScores = subset.map {
+            Pair(it.name, 100.0 - it.colourDifference as ABColourDifference * 4.0)
+        }
         val rt = 100 - rms * 4.0
-        return TheaCRIResult(rt, cct, refLight, calcUVColourDifference(refLight.xyz, testIllum.xyz))
+        return TheaCRIResult(rt, cct, refLight, calcUVColourDifference(refLight.xyz, testIllum.xyz), indivividualScores,
+            this.sampleSetType)
 
     }
 }

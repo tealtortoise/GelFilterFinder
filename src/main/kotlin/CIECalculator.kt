@@ -215,7 +215,7 @@ class CIECalculator {
         }
         return CieXYZ(outX, outY, outZ, illuminant)
     }
-    public fun spectrum5nmToXYZ(spectrum: IlluminantSpectrum, refIlluminant: Illuminant = nullIlluminant): CieXYZ {
+    fun spectrum5nmToXYZ(spectrum: IlluminantSpectrum, refIlluminant: Illuminant = nullIlluminant): CieXYZ {
         var outX = 0.0
         var outY = 0.0
         var outZ = 0.0
@@ -281,7 +281,7 @@ class GelFilter(public var name: String, var spectrum: ReflectanceSpectrum,val d
     public var score = 0.0
 
     public val d65xyz by lazy {
-        cieCalculator.legacySpectrum5nmToXYZ(this.spectrum, D65)
+        cieCalculator.spectrum5nmToXYZ(getFilteredSpectrum(D65))
     }
     fun getXYZ(illuminant: Illuminant): CieXYZ {
         return cieCalculator.spectrum5nmToXYZ(getFilteredSpectrum(illuminant), refIlluminant = illuminant)
@@ -306,7 +306,7 @@ class GelFilter(public var name: String, var spectrum: ReflectanceSpectrum,val d
 
     public fun dilute(strength: Double): GelFilter {
         val newSpec: ReflectanceSpectrum = this.spectrum.map { 1.0 - (1.0 - it) * strength }
-        val g = GelFilter(this.name + " %,.2fapp".format(strength), newSpec, dilutedBy = strength)
+        val g = GelFilter(this.name + " %,.3fapp".format(strength), newSpec, dilutedBy = strength)
         return  g
     }
 
@@ -331,7 +331,9 @@ class GelFilter(public var name: String, var spectrum: ReflectanceSpectrum,val d
                 (1.0 - aContrib - bContrib - stackedContrib)
             }
         }
-        val compositeFilter = GelFilter("${this.name} + ${other.name} ${if (simplyStack) "(Stacked)" else ""}", composteSpec)
+        val compositeFilter = GelFilter("${this.name} + ${other.name} ${if (simplyStack) "(Stacked)" else ""}",
+            composteSpec,
+            dilutedBy = this.dilutedBy + other.dilutedBy)
         return compositeFilter
     }
 
