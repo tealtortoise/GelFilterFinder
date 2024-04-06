@@ -71,7 +71,13 @@ fun main() {
     //val baseIlluminant = readArgyllIlluminant("data/NewSoraa_60d_1_Lee400Cold.sp")
 //    val baseIlluminant = readArgyllIlluminant("/mnt/argyll/Illuminants/6000kcheapled.sp")
 //    val baseIlluminant = readArgyllIlluminant("/mnt/argyll/Illuminants/6000kcheapled.sp")
-    val baseIlluminant = readArgyllIlluminant("/mnt/argyll/Illuminants/Osram_11W_4000K_Ra90_Onedot_Lee400ColdHR.sp")
+    val coldIlluminant = readArgyllIlluminant("/mnt/argyll/Illuminants/Philips_6.2W_6500k_1_Lee400ColfdHR.sp")
+    val hotIlluminant = readArgyllIlluminant("/mnt/argyll/Illuminants/Philips_6.2w_6500K_1_Lee400HotHR.sp")
+//    baseIlluminant.spectrum.take(5).forEach { println(it) }
+//    val first: Pair<Illuminant, Double> = (baseIlluminant, 0.0)
+    val baseIlluminant = mixIlluminants(listOf(Pair(hotIlluminant, 0.5), Pair(coldIlluminant, 0.5)))
+
+//    val baseIlluminant = readArgyllIlluminant("/mnt/argyll/Illuminants/Kosnic_7w_5000k_Lee400ColdHR.sp")
 //    val baseIlluminant = readArgyllIlluminant("/mnt/argyll/Illuminants/HiLine_6.5w_4000k_36d_HotLee400.sp")
 //    val baseIlluminant = readArgyllIlluminant("data/Soraa_5000k_Twosnapped_Lee400Hot.sp")
 
@@ -82,20 +88,20 @@ fun main() {
     }
     println(cricalc.calculateRt(baseIlluminant).sampleScores[8])
 
-    val target_cct: CCT = 4200.0
-    val idealIlluminant = spectrumGenerator.getBlackbodySpectrum(target_cct)
+    val target_cct: CCT = 5200.0
+    val idealIlluminant = spectrumGenerator.getDaylightSpectrumFromCCT(target_cct)
     val target_duv = idealIlluminant.cct.duv
     val idealYuv = idealIlluminant.yuv
-    val yuvTolerance = 0.003
+    val yuvTolerance = 0.006
     val cctTolerance = 200
-    val duvTolerance = 0.0015
-    val dilutes = (6..15).map { 2.0.pow(-it / 5.0) }
-    val singleFilterYFloor = 0.5
-    val stackYFloor = 0.3
+    val duvTolerance = 0.0008
+    val dilutes = (0..15).map { 2.0.pow(-it / 4.0) }
+    val singleFilterYFloor = 0.75
+    val stackYFloor = 0.7
     val weight_Rt = 1.01
     val weight_r9 = 0.0
     val weight_38 = 0.0
-    val weight_Y = 1.0
+    val weight_Y = 1.5
     val stackThreeFilters = false
     println("Dilutes:" + dilutes.joinToString { "%.3f".format(it)})
     var outResults = mutableListOf<FilterTestResult>()
@@ -118,10 +124,10 @@ fun main() {
             dilutes.map { amt -> if (amt < 0.99) gel.dilute(amt) else gel }
         }
         .flatten()
-//        .filter {
-//            val duv = calcUVColourDifference(it.d65xyz, D65.xyz)
-//            abs(duv) in 0.001..0.5
-//        }
+        .filter {
+            val duv = calcUVColourDifference(it.d65xyz, D65.xyz)
+            abs(duv) in 0.0008..0.5
+        }
         .filter {
             it.getXYZ(baseIlluminant).Y > singleFilterYFloor
         }
@@ -154,12 +160,12 @@ fun main() {
                 ))
             }
 //            for (b in a..<filters.count()) {
-            for (b in 226..226) {
+            for (b in a..<filters.size) {
                 if (a == b) continue
                 gotToStart++
                 val filter_a = filters[a]
-//                val filter_b = filters[b]
-                val filter_b = uVFilter
+                val filter_b = filters[b]
+//                val filter_b = uVFilter
                 val filter_z = filters[z]
                 if (stackThreeFilters) {
                     if (filter_a.d65xyz.Y * filter_b.d65xyz.Y * filter_z.d65xyz.Y < stackYFloor - 0.05) continue
@@ -188,20 +194,25 @@ fun main() {
                 gotToDuv++
                 if (abs(cctresult.cct - target_cct) > cctTolerance) continue
                 gotToQuickCRI++
-                val ra = cricalc.calculateRt(illum, idealIlluminant)
-                if (ra.rt < 88) continue
+                var criScore = 0.0
+                var ra: TheaCRIResult? = null
+                var rt: TheaCRIResult? = null
+//                for (criIllum in listOf(coldIlluminant, hotIlluminant)){
+                for (criIllum in listOf(hotIlluminant)){
+                    val criSpectrum = compositeFilter.getFilteredSpectrum(criIllum)
+                    ra = cricalc.calculateRt(Illuminant(criSpectrum), idealIlluminant)
+//                    if (ra.rt < 92) continue
+                    rt = tm30calc.calculateRt(illum)
+                    criScore += ((100 - rt.rt) * 0.5).pow(2) * weight_Rt +
+                            ((100 - ra.sampleScores[8].second) * 0.8).pow(2) * weight_r9 +
+                            ((100 - rt.sampleScores[15].second) * 0.5).pow(2) * weight_38
+                }
                 gotToLongCRI++
-                val rt = tm30calc.calculateRt(illum)
-//                val rt = tm30calc.calculateRt(illum)
-//                if (rt.rt < 88) continue
                 gotToEnd++
                 if (abs(cctresult.duv - target_duv) > yuvTolerance) continue
-                val score = (1.0 - illum.xyz.Y).pow(2) * 95 * weight_Y +
-                        ((100 - rt.rt) * 0.5).pow(2) * weight_Rt +
-                        ((100 - ra.sampleScores[8].second) * 0.5).pow(2) * weight_r9 +
-                        ((100 - rt.sampleScores[15].second) * 0.5).pow(2) * weight_38
-                compositeFilter.score = score// * miredComp
-                val result = FilterTestResult(compositeFilter, illum, compositeFilter.score, cctresult, rt, ra)
+                val score = (1.0 - illum.xyz.Y).pow(2) * 95 * weight_Y + criScore / 2.0
+                compositeFilter.score = score
+                val result = FilterTestResult(compositeFilter, illum, compositeFilter.score, cctresult, rt!!, ra!!)
                 when (outResults.count()) {
                     in 0..15 -> outResults.addLast(result)
                     else -> if (result.score < outResults.map { it.score }.max()) outResults.addLast(result)

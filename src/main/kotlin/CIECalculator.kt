@@ -81,6 +81,15 @@ class Illuminant(val spectrum: IlluminantSpectrum, val name: String = "") {
     }
 }
 
+fun mixIlluminants(inputs: List<Pair<Illuminant, Double>>): Illuminant {
+    val spectrum = inputs.map { (ill, prop) ->
+        ill.spectrum.map { it * prop }
+    }.reduce { spec_a, spec_b ->
+        spec_a.zip(spec_b).map {(a, b) -> a + b}
+    }
+    return Illuminant(spectrum, "Mix")
+}
+
 val cieCalculator = CIECalculator()
 
 fun readIlluminant(pathn: String, normalise: Boolean = true): Illuminant {
