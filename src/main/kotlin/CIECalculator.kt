@@ -13,12 +13,12 @@ const val startWavelength5nm = 400
 const val endWavelength5nm = 700
 const val wavelengthCount5nm = (endWavelength5nm - startWavelength5nm) / 5 + 1
 
-typealias ReflectanceSpectrum = List<Double>
-typealias TransmissionSpectrum = List<Double>
-typealias TransmittedSpectrum = List<Double>
-typealias IlluminantSpectrum = List<Double>
-typealias CMF = List<Double>
-typealias MutableCMF = MutableList<Double>
+typealias ReflectanceSpectrum = Array<Float>
+typealias TransmissionSpectrum = Array<Float>
+typealias TransmittedSpectrum = Array<Float>
+typealias IlluminantSpectrum = Array<Float>
+typealias CMF = Array<Float>
+typealias MutableCMF = MutableArray<Float>
 typealias CCT = Double
 typealias Duv = Double
 
@@ -162,18 +162,18 @@ val nullIlluminant by lazy {
     Illuminant((1..wavelengthCount5nm).map { 1.0 }, "null")
 }
 
-fun lineToList(line: String): List<Double> {
+fun lineToList(line: String): Array<Float> {
     return line.split(",").map { it.toDouble() }
 }
 class CIECalculator {
-    public var wavelengthData5nm: MutableList<Double> = mutableListOf()
+    public var wavelengthData5nm: MutableArray<Float> = mutableListOf()
     private var cieXData: CMF
     private var cieYData: CMF
     private var cieZData: CMF
     private var cieXData5nm: MutableCMF = mutableListOf()
     private var cieYData5nm: MutableCMF = mutableListOf()
     private var cieZData5nm: MutableCMF = mutableListOf()
-    private var wavelengthData: List<Double>
+    private var wavelengthData: Array<Float>
     public var indexRange: IntRange
 
     init {

@@ -5,9 +5,9 @@ import kotlin.math.exp
 import kotlin.math.pow
 
 class SpectrumGenerator() {
-    val s0List: MutableList<Double> = mutableListOf()
-    val s1List: MutableList<Double> = mutableListOf()
-    val s2List: MutableList<Double> = mutableListOf()
+    val s0List: MutableArray<Float> = mutableListOf()
+    val s1List: MutableArray<Float> = mutableListOf()
+    val s2List: MutableArray<Float> = mutableListOf()
 
     init {
         val csvData = File("data/DIlluminants.csv").readText()
