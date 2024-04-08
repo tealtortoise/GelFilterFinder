@@ -30,7 +30,7 @@ class ColourSample(val name: String, val reflectanceSpectrum: List<Double>) {
 }
 val neutralSample = ColourSample("Neutral Reference Sample", cieCalculator.indexRange.map { 0.5 })
 
-class TheaCRIResult(val rt: Double,val cct: CCT, val refIllum: Illuminant,
+class TheaCRIResult(val rt: Double, val cct: CCT, val refIllum: Illuminant,
                     val duv: UVColourDifference, val sampleScores: List<Pair<String, Double>>, val resulttype: RtSampleSet) {
     override fun toString(): String {
         return when (resulttype) {

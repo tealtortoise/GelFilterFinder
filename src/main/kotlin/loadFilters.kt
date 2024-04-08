@@ -46,9 +46,9 @@ fun mainb() {
     println("Found ${filters.count()} filters")
 }
 
-class FilterTestResult(val filter: GelFilter,val resultingIlluminant: Illuminant,
+class FilterTestResult(val filter: GelFilter, val resultingIlluminant: Illuminant,
                        val score: Double, val cctResult: CCTResult,
-    val theaCRIResult: TheaCRIResult,val criResult: TheaCRIResult){
+                       val theaCRIResult: TheaCRIResult, val criResult: TheaCRIResult){
     override fun toString(): String {
         return "${filter.name}:\nScore: $score, CCT: ${cctResult.cct}, " +
                 "Duv: ${cctResult.duv}, Rt: ${theaCRIResult.rt}," +
@@ -71,11 +71,16 @@ fun main() {
     //val baseIlluminant = readArgyllIlluminant("data/NewSoraa_60d_1_Lee400Cold.sp")
 //    val baseIlluminant = readArgyllIlluminant("/mnt/argyll/Illuminants/6000kcheapled.sp")
 //    val baseIlluminant = readArgyllIlluminant("/mnt/argyll/Illuminants/6000kcheapled.sp")
-    val coldIlluminant = readArgyllIlluminant("/mnt/argyll/Illuminants/Philips_6.2W_6500k_1_Lee400ColfdHR.sp")
-    val hotIlluminant = readArgyllIlluminant("/mnt/argyll/Illuminants/Philips_6.2w_6500K_1_Lee400HotHR.sp")
+//    val coldIlluminant = readArgyllIlluminant("/mnt/argyll/Illuminants/Philips_6.2W_6500k_1_Lee400ColfdHR.sp")
+//    val hotIlluminant = readArgyllIlluminant("/mnt/argyll/Illuminants/Philips_6.2w_6500K_1_Lee400HotHR.sp")
+//    val coldIlluminant = readArgyllIlluminant("/mnt/argyll/Illuminants/NewSoraa_36d_1_Lee400Cold.sp")
+//    val hotIlluminant = readArgyllIlluminant("/mnt/argyll/Illuminants/NewSoraa_36d_1d_Lee400Hotish.sp")
+    val baseIlluminant = readArgyllIlluminant("/mnt/argyll/Illuminants/Soraa_18.5W_4000k_Par30S_Lee400Hot.sp")
+    val hotIlluminant = baseIlluminant
+    val coldIlluminant = baseIlluminant
 //    baseIlluminant.spectrum.take(5).forEach { println(it) }
 //    val first: Pair<Illuminant, Double> = (baseIlluminant, 0.0)
-    val baseIlluminant = mixIlluminants(listOf(Pair(hotIlluminant, 0.5), Pair(coldIlluminant, 0.5)))
+//    val baseIlluminant = mixIlluminants(listOf(Pair(hotIlluminant, 0.5), Pair(coldIlluminant, 0.5)))
 
 //    val baseIlluminant = readArgyllIlluminant("/mnt/argyll/Illuminants/Kosnic_7w_5000k_Lee400ColdHR.sp")
 //    val baseIlluminant = readArgyllIlluminant("/mnt/argyll/Illuminants/HiLine_6.5w_4000k_36d_HotLee400.sp")
@@ -88,21 +93,22 @@ fun main() {
     }
     println(cricalc.calculateRt(baseIlluminant).sampleScores[8])
 
-    val target_cct: CCT = 5200.0
-    val idealIlluminant = spectrumGenerator.getDaylightSpectrumFromCCT(target_cct)
+    val target_cct: CCT = 4100.0
+    val idealIlluminant = spectrumGenerator.getBlackbodySpectrum(target_cct)
     val target_duv = idealIlluminant.cct.duv
     val idealYuv = idealIlluminant.yuv
-    val yuvTolerance = 0.006
-    val cctTolerance = 200
-    val duvTolerance = 0.0008
-    val dilutes = (0..15).map { 2.0.pow(-it / 4.0) }
-    val singleFilterYFloor = 0.75
-    val stackYFloor = 0.7
-    val weight_Rt = 1.01
+    val yuvTolerance = 0.016
+    val cctTolerance = 60
+    val duvTolerance = 0.0005
+    val dilutes = (4..15).map { 2.0.pow(-it / 4.0) }
+    val singleFilterYFloor = 0.79
+    val stackYFloor = 0.755
+    val weight_Rt = 0.50
     val weight_r9 = 0.0
     val weight_38 = 0.0
-    val weight_Y = 1.5
+    val weight_Y = 2.5
     val stackThreeFilters = false
+//    val stackThreeFilters = false
     println("Dilutes:" + dilutes.joinToString { "%.3f".format(it)})
     var outResults = mutableListOf<FilterTestResult>()
     val filters = filterDataLines
@@ -126,7 +132,7 @@ fun main() {
         .flatten()
         .filter {
             val duv = calcUVColourDifference(it.d65xyz, D65.xyz)
-            abs(duv) in 0.0008..0.5
+            abs(duv) in 0.001..0.1
         }
         .filter {
             it.getXYZ(baseIlluminant).Y > singleFilterYFloor
@@ -166,6 +172,7 @@ fun main() {
                 val filter_a = filters[a]
                 val filter_b = filters[b]
 //                val filter_b = uVFilter
+//                if (b != a+1){continue}
                 val filter_z = filters[z]
                 if (stackThreeFilters) {
                     if (filter_a.d65xyz.Y * filter_b.d65xyz.Y * filter_z.d65xyz.Y < stackYFloor - 0.05) continue
@@ -226,6 +233,7 @@ fun main() {
         }
 
         if (!stackThreeFilters) break
+        println("$z...")
     }
     outResults.forEach {
         println(it)
