@@ -7,7 +7,7 @@ import kotlin.math.abs
 typealias ABColourDifference = Double
 typealias UVColourDifference = Double
 
-class ColourSample(val name: String, val reflectanceSpectrum: List<Double>) {
+class ColourSample(val name: String, val reflectanceSpectrum: Array<Float>) {
     public var colourDifference: ABColourDifference? = null
 
     public fun render(illuminant: Illuminant): CieXYZ {

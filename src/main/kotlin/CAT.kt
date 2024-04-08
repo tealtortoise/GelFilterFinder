@@ -2,8 +2,8 @@ package org.example
 
 val zeroTwoDMatrix = listOf(mutableListOf(0.0, 0.0, 0.0), mutableListOf(0.0,0.0,0.0), mutableListOf(0.0,0.0,0.0))
 
-open class TwoDimMatrix(inp: List<List<Double>> = zeroTwoDMatrix) {
-    public val matrix: List<List<Double>>
+open class TwoDimMatrix(inp: List<Array<Float>> = zeroTwoDMatrix) {
+    public val matrix: List<Array<Float>>
 
     init {
         this.matrix = inp.toList()
@@ -17,7 +17,7 @@ open class TwoDimMatrix(inp: List<List<Double>> = zeroTwoDMatrix) {
     }
 }
 
-class CATMatrix(inp: List<List<Double>>, val sourceIlluminant: Illuminant, val targetIlluminant: Illuminant): TwoDimMatrix(inp)
+class CATMatrix(inp: List<Array<Float>>, val sourceIlluminant: Illuminant, val targetIlluminant: Illuminant): TwoDimMatrix(inp)
 
 val cat16  = TwoDimMatrix(listOf(listOf(0.401288, -0.250268, -0.002079),
     listOf(0.650173,  1.204414,  0.048952), listOf(-0.051461,  0.045854,  0.953127)))
